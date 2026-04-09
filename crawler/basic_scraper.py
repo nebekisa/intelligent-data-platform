@@ -12,23 +12,33 @@ import pandas as pd
 import json
 import time
 import logging
+import sys
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
-import os
-# Fix for Windows console Unicode issues
-import sys
+
+# ===== FIX FOR WINDOWS CONSOLE UNICODE =====
 if sys.platform == 'win32':
     import io
+    # Force console to use UTF-8 encoding
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    # Also set environment variable for Python
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
 
-# Configure logging for professional monitoring
+# ===== CONFIGURE LOGGING =====
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
+
+# Configure logging to handle Unicode properly
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('scraper.log'),
-        logging.StreamHandler()
+        # File handler - uses UTF-8 encoding
+        logging.FileHandler('logs/scraper.log', encoding='utf-8'),
+        # Console handler - will use our fixed stdout
+        logging.StreamHandler(sys.stdout)
     ]
 )
 
@@ -142,7 +152,7 @@ class BasicQuoteScraper:
         
         return quotes
     
-    def scrape_multiple_pages(self, max_pages: int = 3):
+    def scrape_multiple_pages(self, max_pages: int = 5):
         """
         Scrape quotes from multiple pages.
         
@@ -159,20 +169,21 @@ class BasicQuoteScraper:
             else:
                 url = f"{base_url}/page/{page_num}/"
             
-            logging.info(f"\n📄 Scraping page {page_num}: {url}")
+            # Use print for user-friendly output (handles Unicode better)
+            print(f"\n[Page {page_num}] Scraping: {url}")
             
             # Fetch the page
             html = self.fetch_page(url)
             
             if not html:
-                logging.warning(f"Failed to fetch page {page_num}, stopping...")
+                print(f"  [!] Failed to fetch page {page_num}, stopping...")
                 break
             
             # Parse quotes from this page
             page_quotes = self.parse_quotes(html)
             
             if not page_quotes:
-                logging.info(f"No quotes found on page {page_num}, assuming end of content")
+                print(f"  [!] No quotes found on page {page_num}")
                 break
             
             # Update page number in data
@@ -180,7 +191,7 @@ class BasicQuoteScraper:
                 quote['page'] = page_num
             
             all_quotes.extend(page_quotes)
-            logging.info(f"Collected {len(page_quotes)} quotes from page {page_num}")
+            print(f"  [+] Collected {len(page_quotes)} quotes from page {page_num}")
             
             # Be polite - wait between page requests
             if page_num < max_pages:
@@ -206,7 +217,8 @@ class BasicQuoteScraper:
         
         df = pd.DataFrame(quotes)
         df.to_csv(filename, index=False, encoding='utf-8')
-        logging.info(f"✅ Saved {len(quotes)} quotes to {filename}")
+        logging.info(f"Saved {len(quotes)} quotes to {filename}")
+        print(f"  [OK] CSV saved: {filename}")
         return filename
     
     def save_to_json(self, quotes: List[Dict], filename: str = None):
@@ -228,7 +240,8 @@ class BasicQuoteScraper:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(quotes, f, indent=2, ensure_ascii=False)
         
-        logging.info(f"✅ Saved {len(quotes)} quotes to {filename}")
+        logging.info(f"Saved {len(quotes)} quotes to {filename}")
+        print(f"  [OK] JSON saved: {filename}")
         return filename
     
     def generate_summary_stats(self, quotes: List[Dict]):
@@ -244,7 +257,7 @@ class BasicQuoteScraper:
         df = pd.DataFrame(quotes)
         
         print("\n" + "="*60)
-        print("📊 DATA COLLECTION SUMMARY")
+        print("DATA COLLECTION SUMMARY")
         print("="*60)
         print(f"Total quotes collected: {len(quotes)}")
         print(f"Unique authors: {df['author'].nunique()}")
@@ -253,28 +266,29 @@ class BasicQuoteScraper:
         
         # Top 5 authors
         top_authors = df['author'].value_counts().head(5)
-        print("\n🏆 Top 5 Authors:")
+        print("\nTop 5 Authors:")
         for author, count in top_authors.items():
             print(f"  - {author}: {count} quotes")
         
         # Sample a random quote
         sample_quote = df.sample(n=1).iloc[0]
-        print("\n✨ Sample Quote:")
-        print(f"  \"{sample_quote['quote_text']}\"")
+        print("\nSample Quote:")
+        print(f"  \"{sample_quote['quote_text'][:150]}...\"")
         print(f"  — {sample_quote['author']}")
         print(f"  Tags: {sample_quote['tags']}")
         print("="*60)
 
 def main():
     """Main execution function"""
-    print("\n🚀 Starting Intelligent Data Platform - Stage 1")
-    print("Target: http://quotes.toscrape.com\n")
+    print("\n[START] Intelligent Data Platform - Stage 1")
+    print(f"[INFO] Target: http://quotes.toscrape.com")
+    print(f"[INFO] Log file: logs/scraper.log\n")
     
     # Create scraper instance with 1 second delay between requests
     scraper = BasicQuoteScraper(delay=1.0)
     
     # Scrape quotes from multiple pages
-    print("📥 Collecting quotes from multiple pages...\n")
+    print("[INFO] Collecting quotes from multiple pages...")
     all_quotes = scraper.scrape_multiple_pages(max_pages=5)
     
     if all_quotes:
@@ -285,18 +299,18 @@ def main():
         # Generate summary statistics
         scraper.generate_summary_stats(all_quotes)
         
-        print(f"\n✅ SUCCESS: Collected {len(all_quotes)} quotes")
-        print(f"📁 Data saved to:")
-        print(f"   - {csv_file}")
-        print(f"   - {json_file}")
-        print("\n📂 Check the 'data/raw/' directory for your collected data")
+        print(f"\n[SUCCESS] Stage 1 completed!")
+        print(f"  - Collected: {len(all_quotes)} quotes")
+        print(f"  - Data saved to: data/raw/")
+        print(f"  - Log saved to: logs/scraper.log")
     else:
-        print("\n⚠️  No quotes were collected. Please check:")
-        print("   1. Your internet connection")
-        print("   2. The website is accessible: http://quotes.toscrape.com")
-        print("   3. Check scraper.log for detailed errors")
+        print("\n[ERROR] No quotes were collected.")
+        print("  Please check:")
+        print("  1. Your internet connection")
+        print("  2. The website is accessible: http://quotes.toscrape.com")
+        print("  3. Check logs/scraper.log for details")
     
-    print("\n✨ Stage 1 completed! Ready for Stage 2")
+    print("\n[READY] Proceed to Stage 2 when ready!\n")
 
 if __name__ == "__main__":
     main()
