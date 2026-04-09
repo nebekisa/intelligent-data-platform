@@ -1,0 +1,33 @@
+services:
+  api:
+    build: .
+    container_name: quote-api
+    ports:
+      - "8001:8000"  # API on port 8001
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_PATH=/app/data/quotes.db
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    container_name: quote-dashboard
+    ports:
+      - "8502:8501"  # Dashboard on port 8502
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://host.docker.internal:8001  # Important: use port 8001
+    command: >
+      sh -c "streamlit run dashboard/app.py 
+      --server.port=8501 
+      --server.address=0.0.0.0 
+      --server.enableCORS=false 
+      --server.enableXsrfProtection=false 
+      --browser.gatherUsageStats=false"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
